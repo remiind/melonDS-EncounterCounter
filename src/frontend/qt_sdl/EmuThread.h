@@ -112,6 +112,8 @@ public:
     void emuExit();
     void emuFrameStep();
     void emuReset();
+    // EncounterCounter: true while a freshly found shiny is protected
+    bool shinyHeld();
 
     int bootROM(const QStringList& filename, QString& errorstr);
     int bootFirmware(QString& errorstr);

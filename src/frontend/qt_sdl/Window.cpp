@@ -1045,7 +1045,8 @@ void MainWindow::onAppStateChanged(Qt::ApplicationState state)
     }
     else if (state == Qt::ApplicationActive)
     {
-        if (pauseOnLostFocus && !pausedManually)
+        // EncounterCounter: a shiny pause is only ended by hand
+        if (pauseOnLostFocus && !pausedManually && !emuThread->shinyHeld())
             emuThread->emuUnpause();
     }
 }

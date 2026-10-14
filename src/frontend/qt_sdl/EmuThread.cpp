@@ -312,6 +312,13 @@ void EmuThread::run()
                 nlines = emuInstance->nds->RunFrame();
                 // EncounterCounter: report wild encounters to the PokéCounter display
                 PokeCounter::onFrame(*emuInstance->nds);
+                // ...and stop this instance (only this one) on a shiny. Reset and
+                // savestate loading stay blocked until it is resumed by hand.
+                if (PokeCounter::takeShinyEvent(*emuInstance->nds))
+                {
+                    emuPause(false);
+                    emuInstance->osdAddMessage(0xFFE070, "SHINY! Paused - reset and state loading are blocked until you resume");
+                }
             }
 
             if (emuInstance->ndsSave)
@@ -437,7 +444,10 @@ void EmuThread::run()
 
             emit windowUpdate();
 
-            snprintf(melontitle, sizeof(melontitle), "melonDS " MELONDS_VERSION);
+            if (shinyHeld())
+                snprintf(melontitle, sizeof(melontitle), "*** SHINY! *** melonDS " MELONDS_VERSION);
+            else
+                snprintf(melontitle, sizeof(melontitle), "melonDS " MELONDS_VERSION);
             changeWindowTitle(melontitle);
 
             SDL_Delay(75);
@@ -521,6 +531,9 @@ void EmuThread::handleMessages()
 
             if (emuStatus != emuStatus_Paused)
             {
+                // EncounterCounter: resuming by hand ends the shiny protection
+                if (emuInstance->nds)
+                    PokeCounter::releaseShinyHold(*emuInstance->nds);
                 emuInstance->audioEnable();
                 emit windowEmuPause(false);
                 emuInstance->osdAddMessage(0, "Resumed");
@@ -542,6 +555,12 @@ void EmuThread::handleMessages()
             break;
 
         case msg_EmuReset:
+            // EncounterCounter: never reset away a freshly found shiny
+            if (emuInstance->nds && PokeCounter::shinyHold(*emuInstance->nds))
+            {
+                emuInstance->osdAddMessage(0xFFA0A0, "SHINY protection: resume first, then reset");
+                break;
+            }
             emuInstance->reset();
 
             emuStatus = emuStatus_Running;
@@ -624,10 +643,22 @@ void EmuThread::handleMessages()
             break;
 
         case msg_LoadState:
+            if (emuInstance->nds && PokeCounter::shinyHold(*emuInstance->nds))
+            {
+                emuInstance->osdAddMessage(0xFFA0A0, "SHINY protection: resume first, then load a state");
+                msgResult = 0;
+                break;
+            }
             msgResult = emuInstance->loadState(msg.param.value<QString>().toStdString());
             break;
 
         case msg_UndoStateLoad:
+            if (emuInstance->nds && PokeCounter::shinyHold(*emuInstance->nds))
+            {
+                emuInstance->osdAddMessage(0xFFA0A0, "SHINY protection: resume first");
+                msgResult = 0;
+                break;
+            }
             emuInstance->undoStateLoad();
             msgResult = 1;
             break;
@@ -755,6 +786,11 @@ void EmuThread::emuReset()
 {
     sendMessage(msg_EmuReset);
     waitMessage();
+}
+
+bool EmuThread::shinyHeld()
+{
+    return emuInstance->nds && PokeCounter::shinyHold(*emuInstance->nds);
 }
 
 bool EmuThread::emuIsRunning()
