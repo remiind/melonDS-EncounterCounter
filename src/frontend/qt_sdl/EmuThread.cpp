@@ -54,6 +54,7 @@
 #include "Savestate.h"
 
 #include "EmuInstance.h"
+#include "PokeCounter.h"
 
 using namespace melonDS;
 
@@ -309,6 +310,8 @@ void EmuThread::run()
             else
             {
                 nlines = emuInstance->nds->RunFrame();
+                // EncounterCounter: report wild encounters to the PokéCounter display
+                PokeCounter::onFrame(*emuInstance->nds);
             }
 
             if (emuInstance->ndsSave)

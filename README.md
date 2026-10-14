@@ -1,3 +1,17 @@
+# melonDS-EncounterCounter
+
+Fork of [melonDS](https://github.com/melonDS-emu/melonDS) that reports wild Pokémon encounters to a **PokéCounter** desk display (ESP32) on the local network.
+
+- Supported: Pokémon HeartGold, SoulSilver, Platinum, Diamond and Pearl (all languages).
+- Every emulator instance reports on its own, so several instances (*System → Multiplayer → Launch new instance*, or several melonDS windows) can hunt in parallel. Fast forward is fine.
+- Every wild battle is sent as a small UDP/JSON datagram to port 4210 of the display, with species, level, gender, shiny flag, PID, IVs, ability, held item and the game code.
+- The display is found via `pokecounter.local` (system resolver, then a direct mDNS query) or UDP broadcast. To set it explicitly, start melonDS with the environment variable `POKECOUNTER_HOST=<ip>`.
+- If Windows asks whether melonDS may use the network, allow it for private networks.
+
+Changes against upstream (GPLv3): `src/frontend/qt_sdl/PokeCounter.cpp/.h` (new), hooks in `EmuThread.cpp` (after every frame) and `EmuInstance.cpp` (savestate loaded, instance destroyed), `ws2_32` in `src/frontend/qt_sdl/CMakeLists.txt`, CI builds only Windows x64. RAM layouts from [pokebot-nds](https://github.com/wyanido/pokebot-nds) (MIT).
+
+---
+
 <p align="center"><img src="https://raw.githubusercontent.com/melonDS-emu/melonDS/master/res/icon/melon_128x128.png"></p>
 <h2 align="center"><b>melonDS</b></h2>
 <p align="center">

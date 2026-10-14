@@ -1,13 +1,11 @@
-name: Windows
+name: Windows (EncounterCounter)
 
 on:
   push:
     branches:
       - master
       - ci/*
-  pull_request:
-    branches:
-      - master
+  workflow_dispatch:
 
 env:
   MELONDS_GIT_BRANCH: ${{ github.ref }}
@@ -23,8 +21,6 @@ jobs:
         arch:
           - name: x86_64
             image: windows-2025-vs2026
-          - name: arm64
-            image: windows-11-arm
 
     name: ${{ matrix.arch.name }}
     runs-on: ${{ matrix.arch.image }}
@@ -51,7 +47,7 @@ jobs:
         buildPreset: release-windows-${{ matrix.arch.name }}
     - uses: actions/upload-artifact@v7
       with:
-        name: melonDS-windows-${{ matrix.arch.name }}
+        name: melonDS-EncounterCounter-windows-${{ matrix.arch.name }}
         path: .\build\release-windows-${{ matrix.arch.name }}\melonDS.exe
     - name: Save vcpkg cache
       uses: actions/cache/save@v4

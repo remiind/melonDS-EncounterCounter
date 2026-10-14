@@ -35,6 +35,7 @@
 #include "ArchiveUtil.h"
 #endif
 #include "EmuInstance.h"
+#include "PokeCounter.h"
 #include "Config.h"
 #include "Platform.h"
 #include "Net.h"
@@ -171,6 +172,7 @@ EmuInstance::~EmuInstance()
     if (nds)
     {
         saveRTCData();
+        PokeCounter::onInstanceGone(*nds);
         delete nds;
     }
 }
@@ -768,6 +770,8 @@ bool EmuInstance::loadState(const std::string& filename)
     assert(backup == nullptr);
 
     savestateLoaded = true;
+    // EncounterCounter: a reloaded battle must be counted again
+    PokeCounter::onStateLoaded(*nds);
 
     return true;
 }
@@ -824,6 +828,7 @@ void EmuInstance::undoStateLoad()
     // what do we do if it doesn't???
     // but it should work.
     nds->DoSavestate(backupState.get());
+    PokeCounter::onStateLoaded(*nds);
 }
 
 
@@ -1341,6 +1346,7 @@ bool EmuInstance::updateConsole() noexcept
         if (nds)
         {
             saveRTCData();
+            PokeCounter::onInstanceGone(*nds);
             delete nds;
         }
 
