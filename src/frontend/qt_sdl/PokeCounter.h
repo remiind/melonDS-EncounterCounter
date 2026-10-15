@@ -72,6 +72,13 @@ bool takeShinyEvent(melonDS::NDS& nds);
 bool shinyHold(melonDS::NDS& nds);
 void releaseShinyHold(melonDS::NDS& nds);
 
+// Auto-hunt (AutoHunt.h): number of wild Pokémon reported by this instance so
+// far, whether the last one was shiny, and whether the running game is one of
+// the supported ones.
+uint32_t encounterSeq(melonDS::NDS& nds);
+bool lastEncounterShiny(melonDS::NDS& nds);
+bool gameSupported(melonDS::NDS& nds);
+
 // For frontends with a single emulator instance (Android).
 bool takeAnyShinyEvent();
 bool anyShinyHold();

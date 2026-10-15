@@ -12,6 +12,7 @@ set(SOURCES_QT_SDL
     EmuInstanceInput.cpp
     EmuThread.cpp
     PokeCounter.cpp
+    AutoHunt.cpp
     CheatImportDialog.cpp
     CheatsDialog.cpp
     Config.cpp

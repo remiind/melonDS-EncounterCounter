@@ -253,7 +253,10 @@ void EmuThread::run()
             }
 
             // process input and hotkeys
-            emuInstance->nds->SetKeyMask(emuInstance->inputMask);
+            // EncounterCounter: the auto-hunt presses A on top of the player's keys
+            if (emuInstance->hotkeyPressed(HK_AutoHunt))
+                toggleAutoHunt();
+            emuInstance->nds->SetKeyMask(emuInstance->inputMask & ~autoHunt.keysForFrame());
 
             if (emuInstance->isTouching)
                 emuInstance->nds->TouchScreen(emuInstance->touchX, emuInstance->touchY);
@@ -312,6 +315,17 @@ void EmuThread::run()
                 nlines = emuInstance->nds->RunFrame();
                 // EncounterCounter: report wild encounters to the PokéCounter display
                 PokeCounter::onFrame(*emuInstance->nds);
+                // ...and drive the auto-hunt: reset after every non-shiny Pokémon
+                if (autoHunt.active())
+                {
+                    switch (autoHunt.afterFrame(PokeCounter::encounterSeq(*emuInstance->nds),
+                                                PokeCounter::lastEncounterShiny(*emuInstance->nds)))
+                    {
+                    case AutoHunt::Action::Reset: autoHuntReset(); break;
+                    case AutoHunt::Action::Stopped: autoHuntStopped(); break;
+                    default: break;
+                    }
+                }
                 // ...and stop this instance (only this one) on a shiny. Reset and
                 // savestate loading stay blocked until it is resumed by hand.
                 if (PokeCounter::takeShinyEvent(*emuInstance->nds))
@@ -348,7 +362,9 @@ void EmuThread::run()
 
             if (emuInstance->hotkeyPressed(HK_AudioMuteToggle)) emuInstance->toggleAudioMute();
 
-            bool enablefastforward = emuInstance->hotkeyDown(HK_FastForward) | emuInstance->fastForwardToggled;
+            // EncounterCounter: the auto-hunt runs as fast as the PC can
+            const bool hunting = autoHunt.active();
+            bool enablefastforward = emuInstance->hotkeyDown(HK_FastForward) | emuInstance->fastForwardToggled | hunting;
             bool enableslowmo = emuInstance->hotkeyDown(HK_SlowMo) | emuInstance->slowmoToggled;
 
             if (useOpenGL)
@@ -368,7 +384,8 @@ void EmuThread::run()
             slowmo = enableslowmo;
             emuInstance->updateFastForwardMute(fastforward);
 
-            if (slowmo) emuInstance->curFPS = emuInstance->slowmoFPS;
+            if (hunting) emuInstance->curFPS = 1000.0;
+            else if (slowmo) emuInstance->curFPS = emuInstance->slowmoFPS;
             else if (fastforward) emuInstance->curFPS = emuInstance->fastForwardFPS;
             else if (!emuInstance->doLimitFPS && !emuInstance->doAudioSync) emuInstance->curFPS = 1000.0;
             else emuInstance->curFPS = emuInstance->targetFPS;
@@ -393,7 +410,7 @@ void EmuThread::run()
 
             if (frametimeStep < 0.001) frametimeStep = 0.001;
 
-            if (emuInstance->doLimitFPS)
+            if (emuInstance->doLimitFPS && !hunting)
             {
                 double curtime = SDL_GetPerformanceCounter() * perfCountsSec;
 
@@ -541,6 +558,7 @@ void EmuThread::handleMessages()
             break;
 
         case msg_EmuStop:
+            autoHunt.stop(AutoHunt::StopReason::ByUser);
             if (msg.param.value<bool>())
                 emuInstance->nds->Stop();
             emuStatus = emuStatus_Paused;
@@ -589,6 +607,7 @@ void EmuThread::handleMessages()
             break;
 
         case msg_BootROM:
+            autoHunt.stop(AutoHunt::StopReason::ByUser);
             msgResult = 0;
             if (!emuInstance->loadROM(msg.param.value<QStringList>(), true, msgError))
                 break;
@@ -609,6 +628,7 @@ void EmuThread::handleMessages()
             break;
 
         case msg_InsertCart:
+            autoHunt.stop(AutoHunt::StopReason::ByUser);
             msgResult = 0;
             if (!emuInstance->loadROM(msg.param.value<QStringList>(), false, msgError))
                 break;
@@ -617,6 +637,7 @@ void EmuThread::handleMessages()
             break;
 
         case msg_EjectCart:
+            autoHunt.stop(AutoHunt::StopReason::ByUser);
             emuInstance->ejectCart();
             break;
 
@@ -941,4 +962,65 @@ void EmuThread::compileShaders()
     while (renderer.NeedsShaderCompile() &&
              (SDL_GetPerformanceCounter() - startTime) * perfCountsSec < 1.0 / 6.0);
     emuInstance->osdAddMessage(0, "Compiling shader %d/%d", currentShader+1, shadersCount);
+}
+
+
+// ---- EncounterCounter: soft-reset auto-hunt (emulator thread only) -----------
+
+void EmuThread::toggleAutoHunt()
+{
+    melonDS::NDS* nds = emuInstance->nds;
+    if (!autoHunt.active())
+    {
+        if (!nds || !PokeCounter::gameSupported(*nds))
+        {
+            emuInstance->osdAddMessage(0xFFA0A0, "Auto-hunt: only for Pokemon Diamond, Pearl, Platinum, HeartGold, SoulSilver");
+            return;
+        }
+        if (PokeCounter::shinyHold(*nds))
+        {
+            emuInstance->osdAddMessage(0xFFA0A0, "Auto-hunt: a shiny is on screen - resume first");
+            return;
+        }
+    }
+    if (autoHunt.toggle(nds ? PokeCounter::encounterSeq(*nds) : 0) == AutoHunt::Action::Reset)
+    {
+        emuInstance->osdAddMessage(0x80FF80, "Auto-hunt ON: reset, press A, check for shiny - F10 stops");
+        autoHuntReset();
+    }
+    else
+        autoHuntStopped();
+}
+
+void EmuThread::autoHuntReset()
+{
+    emuInstance->reset();
+    const uint32_t n = autoHunt.resets();
+    if (n > 0 && n % 10 == 0)
+    {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Auto-hunt: %u resets", (unsigned)n);
+        emuInstance->osdAddMessage(0, msg);
+    }
+}
+
+void EmuThread::autoHuntStopped()
+{
+    char msg[128];
+    const unsigned n = autoHunt.resets();
+    switch (autoHunt.stopReason())
+    {
+    case AutoHunt::StopReason::Shiny:
+        snprintf(msg, sizeof(msg), "Auto-hunt: SHINY after %u resets!", n);
+        emuInstance->osdAddMessage(0xFFE070, msg);
+        break;
+    case AutoHunt::StopReason::NoBattle:
+        snprintf(msg, sizeof(msg), "Auto-hunt stopped: no battle after %d resets - save in front of the Pokemon", AutoHunt::kMaxTimeouts);
+        emuInstance->osdAddMessage(0xFFA0A0, msg);
+        break;
+    default:
+        snprintf(msg, sizeof(msg), "Auto-hunt OFF (%u resets)", n);
+        emuInstance->osdAddMessage(0, msg);
+        break;
+    }
 }

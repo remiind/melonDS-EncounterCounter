@@ -33,6 +33,7 @@
 
 #include "NDSCart.h"
 #include "GBACart.h"
+#include "AutoHunt.h"
 
 namespace melonDS
 {
@@ -164,6 +165,12 @@ signals:
 
 private:
     void handleMessages();
+
+    // EncounterCounter: soft-reset auto-hunt of this window (AutoHunt.h)
+    void toggleAutoHunt();
+    void autoHuntReset();
+    void autoHuntStopped();
+    AutoHunt autoHunt;
 
     void updateRenderer();
     void compileShaders();

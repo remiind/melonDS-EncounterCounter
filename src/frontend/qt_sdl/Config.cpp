@@ -50,6 +50,8 @@ DefaultList<int> DefaultInts =
 {
     {"Instance*.Keyboard", -1},
     {"Instance*.Joystick", -1},
+    // EncounterCounter: F10 toggles the soft-reset auto-hunt (Qt::Key_F10)
+    {"Instance*.Keyboard.HK_AutoHunt", 0x01000039},
     {"Instance*.Window*.Width", 256},
     {"Instance*.Window*.Height", 384},
     {"Screen.VSyncInterval", 1},

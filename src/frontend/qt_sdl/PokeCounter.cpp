@@ -160,6 +160,10 @@ struct Tracker
     std::atomic<bool> shinyHold{false};
     uint64_t shinyAtMs = 0;   // when the shiny was reported
 
+    // every reported wild Pokémon (auto-hunt, see AutoHunt.h)
+    std::atomic<uint32_t> encounterSeq{0};
+    std::atomic<bool> lastShiny{false};
+
     ~Tracker()
     {
         if (sock != kNoSock)
@@ -477,6 +481,8 @@ void report(Tracker& t, const DecodedMon& m)
                   // the shiny value (TID ^ SID ^ PID high ^ PID low, shiny below 8)
                   (unsigned)(m.otId ^ m.otSid), t.gameCode);
     PC_LOG("wild encounter: %s", json);
+    t.lastShiny.store(m.shiny);
+    t.encounterSeq.fetch_add(1);
     if (m.shiny && autoPauseEnabled())
     {
         t.shinyHold.store(true);
@@ -943,6 +949,9 @@ void onStateLoaded(melonDS::NDS& nds)
 }
 
 bool takeShinyEvent(melonDS::NDS& nds) { return takeShinyEvent(trackerFor(&nds)); }
+uint32_t encounterSeq(melonDS::NDS& nds) { return trackerFor(&nds).encounterSeq.load(); }
+bool lastEncounterShiny(melonDS::NDS& nds) { return trackerFor(&nds).lastShiny.load(); }
+bool gameSupported(melonDS::NDS& nds) { return trackerFor(&nds).supported; }
 bool shinyHold(melonDS::NDS& nds) { return shinyHold(trackerFor(&nds)); }
 void releaseShinyHold(melonDS::NDS& nds) { releaseShinyHold(trackerFor(&nds)); }
 
