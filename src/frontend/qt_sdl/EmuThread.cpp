@@ -985,7 +985,7 @@ void EmuThread::toggleAutoHunt()
     }
     if (autoHunt.toggle(nds ? PokeCounter::encounterSeq(*nds) : 0) == AutoHunt::Action::Reset)
     {
-        emuInstance->osdAddMessage(0x80FF80, "Auto-hunt ON: reset, press A, check for shiny - F10 stops");
+        emuInstance->osdAddMessage(0x80FF80, "Auto-hunt ON: resets until a shiny appears - F10 stops");
         autoHuntReset();
     }
     else
