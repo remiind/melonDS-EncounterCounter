@@ -1034,7 +1034,7 @@ void EmuThread::toggleEggHunt()
         emuInstance->osdAddMessage(0xFFA0A0, err);
         return;
     }
-    emuInstance->osdAddMessage(0x80FF80, "Egg hunt ON: hatches eggs until a shiny comes - F11 stops");
+    emuInstance->osdAddMessage(0x80FF80, "Egg hunt ON: collects eggs until a shiny one comes - F11 stops");
     eggHuntReset();
 }
 
@@ -1045,7 +1045,7 @@ void EmuThread::eggHuntReset()
     if (n > 0)
     {
         char msg[96];
-        snprintf(msg, sizeof(msg), "Egg hunt: round %u, %u hatched", (unsigned)n + 1, (unsigned)PokeCounter::eggHatched(*emuInstance->nds));
+        snprintf(msg, sizeof(msg), "Egg hunt: round %u, %u eggs checked", (unsigned)n + 1, (unsigned)PokeCounter::eggHatched(*emuInstance->nds));
         emuInstance->osdAddMessage(0, msg);
     }
 }
@@ -1059,7 +1059,7 @@ void EmuThread::eggHuntStopped()
     switch (PokeCounter::eggStopReason(nds))
     {
     case PokeCounter::EggStop::Shiny:
-        snprintf(msg, sizeof(msg), "Egg hunt: SHINY hatched after %u eggs!", n);
+        snprintf(msg, sizeof(msg), "Egg hunt: SHINY egg after %u eggs! It is the last one in the party - hatch it yourself", n);
         color = 0xFFE070;
         break;
     case PokeCounter::EggStop::NotInGame:
@@ -1075,7 +1075,7 @@ void EmuThread::eggHuntStopped()
         snprintf(msg, sizeof(msg), "Egg hunt stopped: no eggs for a long time - do the parents get along?");
         break;
     default:
-        snprintf(msg, sizeof(msg), "Egg hunt OFF (%u hatched)", n);
+        snprintf(msg, sizeof(msg), "Egg hunt OFF (%u eggs checked)", n);
         color = 0;
         break;
     }
