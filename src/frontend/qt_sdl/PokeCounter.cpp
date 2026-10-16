@@ -169,6 +169,7 @@ struct EggHunt
     uint16_t hatchSum = 0;
     unsigned pickupCount = 0;
     bool gotEgg = false;
+    bool seenBlank = false;     // the reset has happened (the save is not loaded)
     uint32_t keys = 0;          // for the next frame
     uint32_t cycles = 0, hatched = 0;
     int stopReason = 0;
@@ -1202,6 +1203,7 @@ EggStep eggResetWith(EggHunt& e)
 {
     eggPhase(e, EggHunt::Boot);
     e.sinceReset = 0;
+    e.seenBlank = false;
     e.mountTries = 0;
     e.count = 0;
     e.keys = 0;
@@ -1263,6 +1265,17 @@ EggStep eggAfterFrame(Tracker& t, ReadFn read, void* ctx)
 
     if (e.phase == EggHunt::Boot)
     {
+        // the frontend may reset a little later (Android: from another
+        // thread): nothing happens until the save is gone
+        if (!e.seenBlank)
+        {
+            e.seenBlank = !ok;
+            if (!e.seenBlank && ++e.sinceReset > 600)
+                return eggResetWith(e);   // the reset got lost: ask again
+            if (e.seenBlank)
+                e.sinceReset = 0;
+            return EggStep::None;
+        }
         e.sinceReset++;
         if (ok && r.map == e.map && r.x == e.x0 && r.z == e.z0 && r.count == e.party0)
         {
