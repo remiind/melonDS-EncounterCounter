@@ -57,6 +57,7 @@ enum
     HK_GuitarGripYellow,
     HK_GuitarGripBlue,
     HK_AutoHunt,          // EncounterCounter: soft-reset auto-hunt on/off
+    HK_EggHunt,           // EncounterCounter: egg hunt (Masuda) on/off
     HK_MAX
 };
 

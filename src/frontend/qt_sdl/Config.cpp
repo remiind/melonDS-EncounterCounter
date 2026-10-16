@@ -52,6 +52,8 @@ DefaultList<int> DefaultInts =
     {"Instance*.Joystick", -1},
     // EncounterCounter: F10 toggles the soft-reset auto-hunt (Qt::Key_F10)
     {"Instance*.Keyboard.HK_AutoHunt", 0x01000039},
+    // ... and F11 the egg hunt at the day care (Qt::Key_F11)
+    {"Instance*.Keyboard.HK_EggHunt", 0x0100003A},
     {"Instance*.Window*.Width", 256},
     {"Instance*.Window*.Height", 384},
     {"Screen.VSyncInterval", 1},

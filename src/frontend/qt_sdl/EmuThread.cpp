@@ -256,7 +256,9 @@ void EmuThread::run()
             // EncounterCounter: the auto-hunt presses A on top of the player's keys
             if (emuInstance->hotkeyPressed(HK_AutoHunt))
                 toggleAutoHunt();
-            emuInstance->nds->SetKeyMask(emuInstance->inputMask & ~autoHunt.keysForFrame());
+            if (emuInstance->hotkeyPressed(HK_EggHunt))
+                toggleEggHunt();
+            emuInstance->nds->SetKeyMask(emuInstance->inputMask & ~(autoHunt.keysForFrame() | PokeCounter::eggKeys(*emuInstance->nds)));
 
             if (emuInstance->isTouching)
                 emuInstance->nds->TouchScreen(emuInstance->touchX, emuInstance->touchY);
@@ -326,6 +328,16 @@ void EmuThread::run()
                     default: break;
                     }
                 }
+                // ...and the egg hunt: reset after every round without a shiny
+                if (PokeCounter::eggActive(*emuInstance->nds))
+                {
+                    switch (PokeCounter::eggAfterFrame(*emuInstance->nds))
+                    {
+                    case PokeCounter::EggStep::Reset: eggHuntReset(); break;
+                    case PokeCounter::EggStep::Stopped: eggHuntStopped(); break;
+                    default: break;
+                    }
+                }
                 // ...and stop this instance (only this one) on a shiny. Reset and
                 // savestate loading stay blocked until it is resumed by hand.
                 if (PokeCounter::takeShinyEvent(*emuInstance->nds))
@@ -363,7 +375,7 @@ void EmuThread::run()
             if (emuInstance->hotkeyPressed(HK_AudioMuteToggle)) emuInstance->toggleAudioMute();
 
             // EncounterCounter: the auto-hunt runs as fast as the PC can
-            const bool hunting = autoHunt.active();
+            const bool hunting = autoHunt.active() || (emuInstance->nds && PokeCounter::eggActive(*emuInstance->nds));
             bool enablefastforward = emuInstance->hotkeyDown(HK_FastForward) | emuInstance->fastForwardToggled | hunting;
             bool enableslowmo = emuInstance->hotkeyDown(HK_SlowMo) | emuInstance->slowmoToggled;
 
@@ -559,6 +571,7 @@ void EmuThread::handleMessages()
 
         case msg_EmuStop:
             autoHunt.stop(AutoHunt::StopReason::ByUser);
+            if (emuInstance->nds) PokeCounter::eggStop(*emuInstance->nds);
             if (msg.param.value<bool>())
                 emuInstance->nds->Stop();
             emuStatus = emuStatus_Paused;
@@ -608,6 +621,7 @@ void EmuThread::handleMessages()
 
         case msg_BootROM:
             autoHunt.stop(AutoHunt::StopReason::ByUser);
+            if (emuInstance->nds) PokeCounter::eggStop(*emuInstance->nds);
             msgResult = 0;
             if (!emuInstance->loadROM(msg.param.value<QStringList>(), true, msgError))
                 break;
@@ -629,6 +643,7 @@ void EmuThread::handleMessages()
 
         case msg_InsertCart:
             autoHunt.stop(AutoHunt::StopReason::ByUser);
+            if (emuInstance->nds) PokeCounter::eggStop(*emuInstance->nds);
             msgResult = 0;
             if (!emuInstance->loadROM(msg.param.value<QStringList>(), false, msgError))
                 break;
@@ -638,6 +653,7 @@ void EmuThread::handleMessages()
 
         case msg_EjectCart:
             autoHunt.stop(AutoHunt::StopReason::ByUser);
+            if (emuInstance->nds) PokeCounter::eggStop(*emuInstance->nds);
             emuInstance->ejectCart();
             break;
 
@@ -990,6 +1006,80 @@ void EmuThread::toggleAutoHunt()
     }
     else
         autoHuntStopped();
+}
+
+void EmuThread::toggleEggHunt()
+{
+    melonDS::NDS* nds = emuInstance->nds;
+    if (!nds)
+        return;
+    if (PokeCounter::eggActive(*nds))
+    {
+        PokeCounter::eggStop(*nds);
+        eggHuntStopped();
+        return;
+    }
+    if (autoHunt.active())
+    {
+        emuInstance->osdAddMessage(0xFFA0A0, "Egg hunt: stop the auto-hunt first (F10)");
+        return;
+    }
+    if (PokeCounter::shinyHold(*nds))
+    {
+        emuInstance->osdAddMessage(0xFFA0A0, "Egg hunt: a shiny is on screen - resume first");
+        return;
+    }
+    if (const char* err = PokeCounter::eggStart(*nds))
+    {
+        emuInstance->osdAddMessage(0xFFA0A0, err);
+        return;
+    }
+    emuInstance->osdAddMessage(0x80FF80, "Egg hunt ON: hatches eggs until a shiny comes - F11 stops");
+    eggHuntReset();
+}
+
+void EmuThread::eggHuntReset()
+{
+    emuInstance->reset();
+    const uint32_t n = PokeCounter::eggCycles(*emuInstance->nds);
+    if (n > 0)
+    {
+        char msg[96];
+        snprintf(msg, sizeof(msg), "Egg hunt: round %u, %u hatched", (unsigned)n + 1, (unsigned)PokeCounter::eggHatched(*emuInstance->nds));
+        emuInstance->osdAddMessage(0, msg);
+    }
+}
+
+void EmuThread::eggHuntStopped()
+{
+    char msg[160];
+    melonDS::NDS& nds = *emuInstance->nds;
+    const unsigned n = PokeCounter::eggHatched(nds);
+    uint32_t color = 0xFFA0A0;
+    switch (PokeCounter::eggStopReason(nds))
+    {
+    case PokeCounter::EggStop::Shiny:
+        snprintf(msg, sizeof(msg), "Egg hunt: SHINY hatched after %u eggs!", n);
+        color = 0xFFE070;
+        break;
+    case PokeCounter::EggStop::NotInGame:
+        snprintf(msg, sizeof(msg), "Egg hunt stopped: the save does not load where it was started - save on the path next to the day care");
+        break;
+    case PokeCounter::EggStop::NoBike:
+        snprintf(msg, sizeof(msg), "Egg hunt stopped: cannot get on the bike - register it on Y");
+        break;
+    case PokeCounter::EggStop::Blocked:
+        snprintf(msg, sizeof(msg), "Egg hunt stopped: stuck (blocked or a text that does not close)");
+        break;
+    case PokeCounter::EggStop::NoEggs:
+        snprintf(msg, sizeof(msg), "Egg hunt stopped: no eggs for a long time - do the parents get along?");
+        break;
+    default:
+        snprintf(msg, sizeof(msg), "Egg hunt OFF (%u hatched)", n);
+        color = 0;
+        break;
+    }
+    emuInstance->osdAddMessage(color, msg);
 }
 
 void EmuThread::autoHuntReset()

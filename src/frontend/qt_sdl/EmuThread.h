@@ -170,6 +170,10 @@ private:
     void toggleAutoHunt();
     void autoHuntReset();
     void autoHuntStopped();
+    // ... and the egg hunt (PokeCounter.h)
+    void toggleEggHunt();
+    void eggHuntReset();
+    void eggHuntStopped();
     AutoHunt autoHunt;
 
     void updateRenderer();
