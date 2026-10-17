@@ -414,6 +414,8 @@ MainWindow::MainWindow(int id, EmuInstance* inst, QWidget* parent) :
                 QMenu * submenu = menu->addMenu("Multiplayer");
 
                 actMPNewInstance = submenu->addAction("Launch new instance");
+                // EncounterCounter: Ctrl+Alt+I for more hunting windows
+                actMPNewInstance->setShortcut(QKeySequence("Ctrl+Alt+I"));
                 connect(actMPNewInstance, &QAction::triggered, this, &MainWindow::onMPNewInstance);
 
                 submenu->addSeparator();
