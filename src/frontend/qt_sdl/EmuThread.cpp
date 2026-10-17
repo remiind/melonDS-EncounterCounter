@@ -328,6 +328,16 @@ void EmuThread::run()
                     default: break;
                     }
                 }
+                // ...and show which EVs a wild Pokémon gives (not while auto-hunting)
+                if (const int evSp = PokeCounter::takeEvSpecies(*emuInstance->nds))
+                {
+                    if (!autoHunt.active())
+                    {
+                        const std::string ev = PokeCounter::evText(evSp);
+                        if (!ev.empty())
+                            emuInstance->osdAddMessage(0xA0D8FF, ev.c_str());
+                    }
+                }
                 // ...and the egg hunt: reset after every round without a shiny
                 if (PokeCounter::eggActive(*emuInstance->nds))
                 {
