@@ -95,6 +95,10 @@ void releaseShinyHold(melonDS::NDS& nds);
 uint32_t encounterSeq(melonDS::NDS& nds);
 bool lastEncounterShiny(melonDS::NDS& nds);
 bool gameSupported(melonDS::NDS& nds);
+// Auto-hunt for gifts: remembers the party size of the loaded save; a Pokémon
+// beyond it (starter, Oak's Kanto starter, fossil ...) is reported like an
+// encounter, so the auto-hunt resets on it like on a wild battle.
+void giftArm(melonDS::NDS& nds, bool on);
 
 // For frontends with a single emulator instance (Android).
 bool takeAnyShinyEvent();
@@ -154,6 +158,7 @@ void setGame(Tracker& t, const char* gameCode);
 void processFrame(Tracker& t, ReadFn read, void* ctx);
 void resetState(Tracker& t);
 int takeEvSpecies(Tracker& t);
+void giftArm(Tracker& t, ReadFn read, void* ctx, bool on);
 // Egg hunt core (see above), reading RAM through `read`
 const char* eggStart(Tracker& t, ReadFn read, void* ctx);
 void eggStop(Tracker& t);

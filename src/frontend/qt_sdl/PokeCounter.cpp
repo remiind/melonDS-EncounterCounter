@@ -222,6 +222,11 @@ struct Tracker
     // egg hunt (Masuda method)
     EggHunt egg;
 
+    // auto-hunt for gifts (starter, fossil ...): party size of the save; a
+    // Pokémon beyond it is reported like an encounter, once per load
+    std::atomic<int> giftArmed{0};
+    bool giftDone = false;
+
     // EV yield of the last wild Pokémon, for the frontend's on-screen message
     std::mutex evLock;
     int evSpecies = 0;
@@ -1093,6 +1098,37 @@ void processSave(Tracker& t, const uint8_t* save, uint32_t len)
 
 namespace
 {
+// Gift hunt: a new Pokémon in the party beyond the saved party size (starter,
+// Kanto starter from Oak, fossil, egg from an NPC ...) counts like an encounter
+void giftTick(Tracker& t, ReadFn read, void* ctx)
+{
+    const int armed = t.giftArmed.load();
+    if (armed <= 0)
+        return;
+    const GameLayout& L = *t.game;
+    const uint32_t anchor = rd32(read, ctx, L.anchorPtr + t.offset);
+    if (!isMainRam(anchor))
+    {
+        t.giftDone = false;   // reset: not loaded
+        return;
+    }
+    const unsigned count = read(ctx, anchor + L.partyCountOff);
+    if (count < 1 || count > 6 || (int)count <= armed)
+    {
+        if (count >= 1 && (int)count <= armed)
+            t.giftDone = false;
+        return;
+    }
+    if (t.giftDone)
+        return;
+    DecodedMon m;
+    if (!decodePartyMon(read, ctx, anchor + L.partyDataOff + (count - 1) * kMonSize, m))
+        return;   // still being written
+    t.giftDone = true;
+    PC_LOG("gift: #%u lv%u%s", m.species, m.level, m.shiny ? " SHINY" : "");
+    report(t, m);
+}
+
 // ---------------------------------------------------------------------------
 // Game detection
 // ---------------------------------------------------------------------------
@@ -1652,6 +1688,7 @@ void processFrame(Tracker& t, ReadFn read, void* ctx)
         }
         t.inBattle = false;
         t.handled = false;
+        giftTick(t, read, ctx);
         teamTick(t, read, ctx);
         return;
     }
@@ -1874,6 +1911,27 @@ uint32_t encounterSeq(melonDS::NDS& nds) { return trackerFor(&nds).encounterSeq.
 bool lastEncounterShiny(melonDS::NDS& nds) { return trackerFor(&nds).lastShiny.load(); }
 bool gameSupported(melonDS::NDS& nds) { return trackerFor(&nds).supported; }
 int takeEvSpecies(melonDS::NDS& nds) { return takeEvSpecies(trackerFor(&nds)); }
+
+void giftArm(Tracker& t, ReadFn read, void* ctx, bool on)
+{
+    int count = 0;
+    if (on && t.supported && t.game)
+    {
+        const uint32_t anchor = rd32(read, ctx, t.game->anchorPtr + t.offset);
+        if (isMainRam(anchor))
+        {
+            const unsigned c = read(ctx, anchor + t.game->partyCountOff);
+            if (c >= 1 && c <= 6)
+                count = (int)c;
+        }
+    }
+    t.giftDone = false;
+    t.giftArmed.store(count < 6 ? count : 0);
+}
+
+#ifndef POKECOUNTER_NO_MELONDS
+void giftArm(melonDS::NDS& nds, bool on) { giftArm(trackerFor(&nds), ramRead, &nds, on); }
+#endif
 
 #ifndef POKECOUNTER_NO_MELONDS
 const char* eggStart(melonDS::NDS& nds) { return eggStart(trackerFor(&nds), ramRead, &nds); }

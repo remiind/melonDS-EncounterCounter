@@ -581,7 +581,7 @@ void EmuThread::handleMessages()
 
         case msg_EmuStop:
             autoHunt.stop(AutoHunt::StopReason::ByUser);
-            if (emuInstance->nds) PokeCounter::eggStop(*emuInstance->nds);
+            if (emuInstance->nds) { PokeCounter::eggStop(*emuInstance->nds); PokeCounter::giftArm(*emuInstance->nds, false); }
             if (msg.param.value<bool>())
                 emuInstance->nds->Stop();
             emuStatus = emuStatus_Paused;
@@ -631,7 +631,7 @@ void EmuThread::handleMessages()
 
         case msg_BootROM:
             autoHunt.stop(AutoHunt::StopReason::ByUser);
-            if (emuInstance->nds) PokeCounter::eggStop(*emuInstance->nds);
+            if (emuInstance->nds) { PokeCounter::eggStop(*emuInstance->nds); PokeCounter::giftArm(*emuInstance->nds, false); }
             msgResult = 0;
             if (!emuInstance->loadROM(msg.param.value<QStringList>(), true, msgError))
                 break;
@@ -653,7 +653,7 @@ void EmuThread::handleMessages()
 
         case msg_InsertCart:
             autoHunt.stop(AutoHunt::StopReason::ByUser);
-            if (emuInstance->nds) PokeCounter::eggStop(*emuInstance->nds);
+            if (emuInstance->nds) { PokeCounter::eggStop(*emuInstance->nds); PokeCounter::giftArm(*emuInstance->nds, false); }
             msgResult = 0;
             if (!emuInstance->loadROM(msg.param.value<QStringList>(), false, msgError))
                 break;
@@ -663,7 +663,7 @@ void EmuThread::handleMessages()
 
         case msg_EjectCart:
             autoHunt.stop(AutoHunt::StopReason::ByUser);
-            if (emuInstance->nds) PokeCounter::eggStop(*emuInstance->nds);
+            if (emuInstance->nds) { PokeCounter::eggStop(*emuInstance->nds); PokeCounter::giftArm(*emuInstance->nds, false); }
             emuInstance->ejectCart();
             break;
 
@@ -1009,9 +1009,13 @@ void EmuThread::toggleAutoHunt()
             return;
         }
     }
+    // a gift (starter, Oak's Kanto starter, fossil ...) counts like a battle:
+    // remember the party size of the save before the first reset
+    if (nds && !autoHunt.active())
+        PokeCounter::giftArm(*nds, true);
     if (autoHunt.toggle(nds ? PokeCounter::encounterSeq(*nds) : 0) == AutoHunt::Action::Reset)
     {
-        emuInstance->osdAddMessage(0x80FF80, "Auto-hunt ON: resets until a shiny appears - F10 stops");
+        emuInstance->osdAddMessage(0x80FF80, "Auto-hunt ON: resets until a shiny appears (battle or gift) - F10 stops");
         autoHuntReset();
     }
     else
@@ -1106,6 +1110,8 @@ void EmuThread::autoHuntReset()
 
 void EmuThread::autoHuntStopped()
 {
+    if (emuInstance->nds)
+        PokeCounter::giftArm(*emuInstance->nds, false);
     char msg[128];
     const unsigned n = autoHunt.resets();
     switch (autoHunt.stopReason())
